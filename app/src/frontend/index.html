@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Gazoz Manager</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <h1>Gazoz Manager</h1>
+
+  <section>
+    <h2>Add New Gazoz</h2>
+    <form id="add-form">
+      <input type="text" id="name" placeholder="Name" required />
+      <input type="text" id="supermarket" placeholder="Supermarket" required />
+      <input type="number" id="price_ils" placeholder="Price (₪)" step="0.01" required />
+      <button type="submit">Add Gazoz</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>Gazoz List</h2>
+    <ul id="gazoz-list"></ul>
+  </section>
+
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</body>
+</html>

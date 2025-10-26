@@ -1,0 +1,73 @@
+## Default configuration values for the application & its dependencies
+
+# General application
+appName: gazoz-app
+appNamespace: gazoz
+
+# Deployment
+deployment:
+  replicas: 1
+  image:
+    repository: "011782265792.dkr.ecr.ap-south-1.amazonaws.com/danny.bogach/portfolio"
+    tag: "1.0.2"
+    imagePullPolicy: Always
+  resources:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "200m"
+      memory: "256Mi"
+  mongodb:
+    uri: "mongodb://$(MONGO_USERNAME):$(MONGO_PASSWORD)@gazoz-app-mongodb-headless.gazoz.svc.cluster.local/$(MONGO_DATABASE)?replicaSet=rs0"
+
+# Service
+service:
+  name: gazoz-app-service
+  type: ClusterIP
+  ports:
+    serviceProtocol: TCP
+    servicePort: 80
+    appPort: 5000
+
+# ConfigMap
+configmap:
+  name: mongo-conf
+  data:
+    logLevel: "info"
+    persistence: "true"
+
+# Ingress
+ingress:
+  name: app-ingress
+  class: nginx
+  host: danny-portfolio.ddnsking.com
+  tlsSecretName: app-tls
+
+# ClusterIssuer
+clusterIssuer:
+  server: https://acme-v02.api.letsencrypt.org/directory
+  #server: https://acme-staging-v02.api.letsencrypt.org/directory
+  secretName: letsencrypt-prod
+  #secretName: letsencrypt-staging
+  email: nitrofin10@gmail.com
+
+# MongoDB
+mongodb:
+  architecture: replicaset
+  replicaCount: 2
+  persistence:
+    enabled: true
+    size: "8Gi"
+    storageClass: "gp3"
+    accessModes:
+      - ReadWriteOnce
+  auth:
+    enabled: true
+    usernames: ["danny"]
+    databases: ["gazozdb"]
+    existingSecret: danny-portfolio-secrets
+  readinessProbe:
+    enabled: false
+  livenessProbe:
+    enabled: false

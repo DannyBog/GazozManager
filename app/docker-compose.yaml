@@ -1,0 +1,68 @@
+services:
+  # MongoDB database service
+  mongodb:
+    build:
+      dockerfile: Dockerfile.mongodb
+    container_name: mongodb
+    env_file: [.env]
+    healthcheck:
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping').ok" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_USERNAME: ${MONGO_USERNAME}
+      MONGO_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+    networks:
+      - backend-net
+    ports:
+      - 27017
+    volumes:
+      - mongodb_data:/data/db
+
+  # Application service
+  gazoz-app:
+    build: .
+    container_name: gazoz-app
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; exit(0) if urllib.request.urlopen('http://localhost:5000').status == 200 else exit(1)"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    environment:
+      MONGO_URI: "mongodb://${MONGO_USERNAME}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DATABASE}"
+    networks:
+      - backend-net
+      - frontend-net
+    ports:
+      - 5000
+
+  # NGINX service for serving static files and proxying requests
+  nginx:
+    build:
+      dockerfile: Dockerfile.nginx
+    container_name: nginx
+    image: nginx:1.29.0-alpine
+    depends_on:
+      gazoz-app:
+        condition: service_healthy
+    networks:
+      - frontend-net
+    ports:
+      - "80:80"
+
+networks:
+  backend-net:
+    name: backend-net
+  frontend-net:
+    name: frontend-net
+
+volumes:
+  mongodb_data:
+    name: mongodb_data

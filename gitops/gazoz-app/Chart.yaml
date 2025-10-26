@@ -1,0 +1,12 @@
+apiVersion: v2
+name: gazoz-app
+description: A Helm chart for the Gazoz App
+type: application
+
+version: 0.1.0
+appVersion: "{{.Values.deployment.image.tag}}"
+
+dependencies:
+  - name: mongodb
+    version: "16.5.30"
+    repository: "https://charts.bitnami.com/bitnami"

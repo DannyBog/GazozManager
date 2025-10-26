@@ -1,0 +1,21 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gazoz-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: "git@gitlab.com:dogdrinker-group/gazozmanagergitops.git"
+    targetRevision: HEAD
+    path: gazoz-app
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: gazoz
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=false

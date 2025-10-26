@@ -1,0 +1,4 @@
+app/.env
+infra/*.tfvars
+infra/.terraform.lock.hcl
+infra/.terraform/

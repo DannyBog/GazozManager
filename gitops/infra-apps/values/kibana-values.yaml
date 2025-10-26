@@ -1,0 +1,13 @@
+replicas: 1
+
+extraEnvs:
+  - name: XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY
+    value: 522083d992683b9d08c5bcb9d695e124
+  - name: XPACK_ALERTING_ENCRYPTIONKEY
+    value: 522083d992683b9d08c5bcb9d695e124
+  - name: XPACK_ACTIONS_ENCRYPTIONKEY
+    value: 522083d992683b9d08c5bcb9d695e124
+
+service:
+  type: LoadBalancer
+

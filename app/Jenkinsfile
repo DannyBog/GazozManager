@@ -1,0 +1,193 @@
+pipeline {
+	agent any
+	
+	options {
+		timestamps()
+	}
+	
+	environment {
+		AWS_REGION = "ap-south-1"
+		ECR_REPO_NAME = "danny.bogach/portfolio"
+		APP_IMAGE = "gazoz-app:latest"
+		VERSION = 0
+		RECIPIENT_EMAIL = ""
+	}
+	
+	stages {	
+		stage("Unit Test") {
+			steps {
+				sh "python3 src/unit_test.py"
+			}
+		}
+		
+		stage("Build") {
+			steps {
+				sh "docker build --no-cache -t ${APP_IMAGE} -f Dockerfile ."
+			}
+		}
+		
+		stage("E2E Test") {
+			when {
+				anyOf {
+					branch "master"
+					branch "feature/*"
+				}
+			}
+			
+			steps {
+				withCredentials([file(credentialsId: "mongodb-env-file", variable: "ENV_FILE")]) {
+					sh """
+						cp "$ENV_FILE" .env
+						docker compose up --build -d
+						pytest src/e2e_test.py --url http://host.docker.internal
+						docker compose down --rmi all -v
+					"""
+				}
+			}
+		}
+		
+		stage("Versioning") {
+			when {
+				branch "master"
+			}
+			
+			steps {
+				script {
+					VERSION = sh(
+						script: """
+							# Get latest version tag (with optional "v" prefix)
+							latest_tag=\$(git tag --list | grep -E '^v?[0-9]+(\\.[0-9]+)*\$' | sort -V | tail -n 1)
+							
+							# Remove leading "v" if present
+							latest_tag="\${latest_tag#v}"
+							
+							# Split into components
+							set -- \$(echo "\${latest_tag}" | tr '.' ' ')
+							major=\$1
+							minor=\$2
+							patch=\$3
+							
+							# Set default values for missing components
+							major=\${major:-1}
+							minor=\${minor:-0}
+							
+							# Fallbacks for missing components
+							major=\${major:-1}
+							minor=\${minor:-0}
+							
+							# If patch is missing, set to 0
+							if [ -z "\${patch}" ]; then
+								patch=0
+							else
+								patch=\$((patch + 1))
+							fi
+							
+							# Assemble the full version
+							full_version="\${major}.\${minor}.\${patch}"
+							echo "\${full_version}"
+						""",
+						returnStdout: true
+					).trim()
+				}
+			}
+		}
+		
+		stage("Tag") {
+			when {
+				branch "master"
+			}
+			
+			steps {
+				withCredentials([sshUserPrivateKey(credentialsId: "gitlab-key", keyFileVariable: "SSH_KEY")]) {
+					sh """
+						eval "\$(ssh-agent -s)"
+						ssh-add "$SSH_KEY"
+						git tag ${VERSION}
+						git push origin ${VERSION}
+					"""
+				}
+			}
+		}
+		
+		stage("Publish") {
+			when {
+				branch "master"
+			}
+			
+			steps {
+				withCredentials([usernamePassword(credentialsId: "aws-creds", usernameVariable: "AWS_ACCESS_KEY_ID", passwordVariable: "AWS_SECRET_ACCESS_KEY")]) {
+					sh """
+						aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+						aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+						aws configure set region ${env.AWS_REGION}
+						
+						account_id=\$(aws sts get-caller-identity --query "Account" --output text)
+						ecr_url=\${account_id}.dkr.ecr.${env.AWS_REGION}.amazonaws.com
+						
+						docker tag ${env.APP_IMAGE} \${ecr_url}/${env.ECR_REPO_NAME}:${VERSION}
+						docker rmi ${env.APP_IMAGE}
+						
+						aws ecr get-login-password --region ${env.AWS_REGION} | \
+						docker login --username AWS --password-stdin \${ecr_url}
+						
+						docker push \${ecr_url}/${env.ECR_REPO_NAME}:${VERSION}
+						docker rmi \${ecr_url}/${env.ECR_REPO_NAME}:${VERSION}
+					"""
+				}
+			}
+		}
+
+		stage("Deploy") {
+			when {
+				branch "master"
+			}
+			
+			steps {
+				sh """
+					git clone git@gitlab.com:dogdrinker-group/gazozmanagergitops.git gitops
+					cd gitops
+					
+					# Update Chart.yaml with new app version
+					sed -i 's/tag: .*/tag: "${VERSION}"/' ./gazoz-app/values.yaml
+					
+					git config user.email "noreply@jenkins.io"
+					git config user.name "Jenkins"
+					
+					# Commit and push changes
+					git add ./gazoz-app/values.yaml
+					git commit -m "Updating version: ${VERSION}"
+					git push origin master
+				"""
+			}
+		}
+	}
+	
+	post {
+		success {
+			echo "Job ${JOB_NAME} (#${BUILD_NUMBER}) succeeded!"
+			updateGitlabCommitStatus name: "Jenkins", state: "success"	
+			emailext subject: "✅ Build Succeeded: ${JOB_NAME} #${BUILD_NUMBER}",
+					 to: "${RECIPIENT_EMAIL}",
+					 body: "Build succeeded for ${JOB_NAME} #${BUILD_NUMBER}\nCheck console output:\n${env.BUILD_URL}console"
+		}
+		
+		failure {
+			echo "Job ${JOB_NAME} (#${BUILD_NUMBER}) failed!"
+			updateGitlabCommitStatus name: "Jenkins", state: "failed"
+			emailext subject: "❌ Build Failed: ${JOB_NAME} #${BUILD_NUMBER}",
+					 to: "${RECIPIENT_EMAIL}",
+					 body: "Build failed for ${JOB_NAME} #${BUILD_NUMBER}\nCheck console output:\n${env.BUILD_URL}console"
+		}
+		
+		always {
+			script {
+				RECIPIENT_EMAIL = sh(
+					script: "git log -1 --pretty=format:'%ae'",
+					returnStdout: true
+				).trim()
+			}
+			
+			cleanWs()
+		}
+	}
+}

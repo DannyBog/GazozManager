@@ -1,0 +1,46 @@
+# Deployment configuration for the DemoCRM application, ensuring replicas of the app container.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{.Values.appName}}
+  namespace: {{.Values.appNamespace}}
+  labels:
+    app: {{.Values.appName}}
+spec:
+  replicas: {{.Values.deployment.replicas}}
+  selector:
+    matchLabels:
+      app: {{.Values.appName}}
+  template:
+    metadata:
+      labels:
+        app: {{.Values.appName}}
+    spec:
+      containers:
+        - name: {{.Values.appName}}
+          image: "{{.Values.deployment.image.repository}}:{{.Values.deployment.image.tag | default .Chart.AppVersion}}"
+          imagePullPolicy: {{.Values.deployment.imagePullPolicy}}
+          ports:
+            - containerPort: {{.Values.service.ports.appPort}}
+          env:
+            - name: MONGO_USERNAME
+              value: {{index .Values.mongodb.auth.usernames 0}}
+            - name: MONGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{.Values.mongodb.auth.existingSecret}}
+                  key: mongodb-passwords
+            - name: MONGO_DATABASE
+              value: {{index .Values.mongodb.auth.databases 0}}
+            - name: MONGO_URI
+              value: {{.Values.deployment.mongodb.uri}}
+          envFrom:
+            - configMapRef:
+                name: {{.Values.configmap.name}}
+          resources:
+            requests:
+              cpu: {{.Values.deployment.resources.requests.cpu}}
+              memory: {{.Values.deployment.resources.requests.memory}}
+            limits:
+              cpu: {{.Values.deployment.resources.limits.cpu}}
+              memory: {{.Values.deployment.resources.limits.memory}}

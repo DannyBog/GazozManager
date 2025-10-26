@@ -1,0 +1,30 @@
+prometheus:
+  prometheusSpec:
+    additionalScrapeConfigs:
+      - job_name: gazoz-app
+        honor_labels: true
+        scrape_interval: 1m
+        scrape_timeout: 30s
+        metrics_path: /metrics
+        scheme: http
+        static_configs:
+          - targets:
+              - danny-portfolio.ddnsking.com
+        tls_config:
+          insecure_skip_verify: true
+
+grafana:
+  enabled: true
+  persistence:
+    enabled: true
+    type: sts
+    storageClassName: "gp3"
+    accessModes:
+      - ReadWriteOnce
+    size: 10Gi
+    finalizers:
+      - kubernetes.io/pvc-protection
+  admin:
+    existingSecret: danny-portfolio-secrets
+    userKey: grafana-username
+    passwordKey: grafana-password
